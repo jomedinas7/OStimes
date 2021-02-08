@@ -2,7 +2,7 @@
 
 import os
 
-#from aa-chatbot.py
+#from aa-chatbot.py modified
 class ConsoleReader:
     def __init__(self):
         pass
@@ -12,7 +12,7 @@ class ConsoleReader:
             return input('$$$$ ').split(" ")
         return input(os.getenv("PS1")).split(" ")
 
-#from aa-chabot.py
+#from aa-chabot.py modified slightly
 class FileReader:
     def __init__(self, filename):
         with open(filename) as f:
@@ -27,21 +27,37 @@ class FileReader:
 
         return line.split(" ")
 
+class TaskExecuter:
+    def __init__(self):
+        pass
+
+    def execute_task(self,args):
+        child_pid = self.execute_background_task(args)
+        os.waitpid(child_pid,0)
+
+    def execute_background_task(self,argsList):
+        child_process = os.fork()
+        if child_process == 0:
+            try:
+                os.execv('/usr/bin/' + argsList[0],argsList)
+            except FileNotFoundError:
+                os._exit(0)
+        return child_process
+
 class Shell:
-    def __init__(self,theReader):
+    def __init__(self,reader):
         self.argsList = []
         self.running = False
-        self.reader = theReader
+        self.reader = reader
+        self.executioner = TaskExecuter()
 
     def start_run(self):
         self.running = True
-        print('PS1: ',os.getenv("PS1"))
         self.run()
 
     def run(self):
         while self.running:
             self.argsList = self.reader.get_next_line()
-
             if len(self.argsList) == 1 and self.argsList[0] == 'exit':
                 self.exit_run()
             self.process_input()
@@ -50,37 +66,35 @@ class Shell:
     def exit_run(self):
         print('Exit successful.')
         self.running = False
+        return
 
     def process_input(self):
+        #handle empty args list
         if len(self.argsList) == 1 and self.argsList[0] == '':
             print('Invalid input')
             return
+
+        # if self.argsList[0] == 'echo' and self.argsList[-1] == '$?':
+        #     pid = os.fork()
+        #     if pid == 0:
+        #         os.execv('/usr/bin/' +self.argsList[0], self.argsList)
+
+        #special cd input
         if self.argsList[0] == 'cd':
             print('cd found')
             os.chdir(self.argsList[1])
             return
+        #special flag to catch PS1 change
         if self.argsList[0][0:3] == 'PS1':
             lolita = self.argsList[0].split("=")
             os.environ['PS1']  = lolita[1]
             return
-        #most functions to be called this way are in /usr/bin/
-        #streamline this input
-        #try-catch block
-        #class ProcessRunner?
-        try:
-            os.execv('/usr/bin/' + self.argsList[0], self.argsList)
-        except FileNotFoundError:
-            print("Invalid command")
+        #for knowing when to run background tasks
+        if self.argsList[-1][-1] == '&':
+            self.executioner.execute_background_task(self.argsList)
+        else:
+            self.executioner.execute_task(self.argsList)
 
-        # if self.argsList[0] == 'ls':
-        #     os.execv('/usr/bin/ls', self.argsList)
-        # if self.argsList[0] == 'cat':
-        #     os.execv('/usr/bin/cat', self.argsList)
-        # if self.argsList[0] == 'grep':
-        #     os.execv('/usr/bin/grep', self.argsList)
-        # if self.argsList[0][0:3] == 'PS1':
-        #     lolita = self.argsList[0].split("=")
-        #     os.environ['PS1']  = lolita[1]
 
 
 
