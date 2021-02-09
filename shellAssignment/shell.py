@@ -22,7 +22,6 @@ class FileReader:
 
     def get_next_line(self):
         line = self.file_lines.pop(0)
-        #print('line:', line)
         if line[0] == '#':
             #skip the line
             line = self.file_lines.pop(0)
@@ -31,38 +30,54 @@ class FileReader:
 
 class TaskExecuter:
     def __init__(self):
-        pass
+        self.redirectedInput = False
+        self.redirectedOutput = False
 
-
-
+        #inspired by Dr. Freudenthal's exec demo
     def execute_task(self,argsList):
         child_process = os.fork()
         if child_process <0:
             sys.exit(1)
         elif child_process == 0:
+            if self.redirectedOutput:
+                print('WOOP')
+                self.redirect_output(argsList[-1])
+                new_args = argsList
+                for i in range(len(new_args)):
+                    if new_args[i] == '>':
+                        argsList = new_args[:i]
+            #search in directories and attempt to run commands
             for path in os.environ['PATH'].split(os.pathsep):
                 try:
                     os.execv(path +'/' + argsList[0],argsList)
                 except FileNotFoundError:
-                    pass
+                    pass #fail silently
             sys.exit(1)
-        else:
-            if argsList[-1] != "&": # We will wait for child to finish
-                ec = os.waitpid(child_process,0)
-                if ec[1] != 0:
-                    print("Program terminated: exit code ", ec[1])
-        return child_process
+        else: #child_process >0
+            if argsList[-1] != "&": # indicate background task
+                exit_code = os.waitpid(child_process,0) #will assign list containing exit code
+                if exit_code[1] != 0:
+                    print("Program terminated: exit code ", exit_code[1])
 
-    def redirect_output(self,src_args,dest):
-        child_id = os.fork()
-        if child_id == 0:
-            try:
-                fd = os.open(dest, os.O_WRONLY | os.O_CREAT)
-                os.dup2(fd, 1)
-                os.execv('/usr/bin/' + src_args[0], src_args)
-            except FileNotFoundError:
-                print('That is not a valid command')
-                os._exit(0)
+    def redirect_output(self, dest):
+        os.close(1) # Redirect child's stdout
+        os.open(dest, os.O_CREAT | os.O_WRONLY)
+        os.set_inheritable(1, True)
+
+    def redirect_input(self, src):
+        os.close(0) # Redirect child's stdin
+        os.open(src, os.O_CREAT | os.O_RDONLY)
+        os.set_inheritable(0, True)
+    # def redirect_output(self,src_args,dest):
+    #     child_id = os.fork()
+    #     if child_id == 0:
+    #         try:
+    #             fd = os.open(dest, os.O_WRONLY | os.O_CREAT)
+    #             os.dup2(fd, 1)
+    #             os.execv('/usr/bin/' + src_args[0], src_args)
+    #         except FileNotFoundError:
+    #             print('That is not a valid command')
+    #             os._exit(0)
 
 
 
@@ -71,7 +86,7 @@ class Shell:
         self.argsList = []
         self.running = False
         self.reader = reader
-        self.executioner = TaskExecuter()
+        self.executioner = TaskExecuter() #it sounded cooler in my head
 
     def start_run(self):
         self.running = True
@@ -91,16 +106,12 @@ class Shell:
         self.running = False
         return
 
+
     def process_input(self):
         #handle empty args list
         if len(self.argsList) == 1 and self.argsList[0] == '':
             print('Invalid input')
             return
-
-        # if self.argsList[0] == 'echo' and self.argsList[-1] == '$?':
-        #     pid = os.fork()
-        #     if pid == 0:
-        #         os.execv('/usr/bin/' +self.argsList[0], self.argsList)
 
         #special cd input
         if self.argsList[0] == 'cd':
@@ -114,17 +125,16 @@ class Shell:
             return
         #redirecting output
         if '>' in self.argsList:
-            args = ' '.join(self.argsList)
-            redirection = args.split('>')
-            command_args = redirection[0].split()
-            dest = redirection[1].replace(' ', '')
-            self.executioner.redirect_output(command_args, dest)
+            # args = ' '.join(self.argsList)
+            # redirection = args.split('>')
+            # command_args = redirection[0].split()
+            # dest = redirection[1].replace(' ', '')
+            # self.executioner.redirect_output(command_args, dest)
+            # return
+            self.executioner.redirectedOutput = True
+            self.executioner.execute_task(self.argsList)
             return
         else:
-            #for knowing when to run background tasks
-            # if self.argsList[-1][-1] == '&':
-            #     self.executioner.execute_background_task(self.argsList)
-            # else:
             self.executioner.execute_task(self.argsList)
 
 
