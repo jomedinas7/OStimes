@@ -1,4 +1,6 @@
 #Joseph Medina - Sandoval
+#Theory of OS
+#Dr. Ward
 
 import os
 import sys
@@ -30,8 +32,15 @@ class FileReader:
 
 class TaskExecuter:
     def __init__(self):
-        self.redirectedInput = False
-        self.redirectedOutput = False
+        self.redirectingInput = False
+        self.redirectingOutput = False
+
+    def format_redirects(self,argsList):
+        new_args = argsList
+        for i in range(len(new_args)):
+            if new_args[i] == '>' or new_args[i] == '<':
+                argsList = new_args[:i]
+        return argsList
 
         #inspired by Dr. Freudenthal's exec demo
     def execute_task(self,argsList):
@@ -39,13 +48,13 @@ class TaskExecuter:
         if child_process <0:
             sys.exit(1)
         elif child_process == 0:
-            if self.redirectedOutput:
-                print('WOOP')
+            #check if command will be redirected
+            if self.redirectingOutput:
                 self.redirect_output(argsList[-1])
-                new_args = argsList
-                for i in range(len(new_args)):
-                    if new_args[i] == '>':
-                        argsList = new_args[:i]
+                argsList = self.format_redirects(argsList)
+            elif self.redirectingInput:
+                self.redirect_input(argsList[-1])
+                argsList = self.format_redirects(argsList)
             #search in directories and attempt to run commands
             for path in os.environ['PATH'].split(os.pathsep):
                 try:
@@ -57,8 +66,12 @@ class TaskExecuter:
             if argsList[-1] != "&": # indicate background task
                 exit_code = os.waitpid(child_process,0) #will assign list containing exit code
                 if exit_code[1] != 0:
-                    print("Program terminated: exit code ", exit_code[1])
+                    if exit_code[1] == 256:
+                        print("Command or directory not found.")
+                    else:
+                        print("Program terminated: exit code ", exit_code[1])
 
+    #redirect functions from snippet of Dr.  p4-redirect.py
     def redirect_output(self, dest):
         os.close(1) # Redirect child's stdout
         os.open(dest, os.O_CREAT | os.O_WRONLY)
@@ -68,17 +81,6 @@ class TaskExecuter:
         os.close(0) # Redirect child's stdin
         os.open(src, os.O_CREAT | os.O_RDONLY)
         os.set_inheritable(0, True)
-    # def redirect_output(self,src_args,dest):
-    #     child_id = os.fork()
-    #     if child_id == 0:
-    #         try:
-    #             fd = os.open(dest, os.O_WRONLY | os.O_CREAT)
-    #             os.dup2(fd, 1)
-    #             os.execv('/usr/bin/' + src_args[0], src_args)
-    #         except FileNotFoundError:
-    #             print('That is not a valid command')
-    #             os._exit(0)
-
 
 
 class Shell:
@@ -102,7 +104,6 @@ class Shell:
         return
 
     def exit_run(self):
-        print('Exit successful.')
         self.running = False
         return
 
@@ -115,7 +116,6 @@ class Shell:
 
         #special cd input
         if self.argsList[0] == 'cd':
-            print('cd found')
             os.chdir(self.argsList[1])
             return
         #special flag to catch PS1 change
@@ -123,17 +123,21 @@ class Shell:
             lolita = self.argsList[0].split("=")
             os.environ['PS1']  = lolita[1]
             return
-        #redirecting output
+        #redirecting output from source
         if '>' in self.argsList:
-            # args = ' '.join(self.argsList)
-            # redirection = args.split('>')
-            # command_args = redirection[0].split()
-            # dest = redirection[1].replace(' ', '')
-            # self.executioner.redirect_output(command_args, dest)
-            # return
-            self.executioner.redirectedOutput = True
+            self.executioner.redirectingOutput = True
             self.executioner.execute_task(self.argsList)
+            #reset back to default
+            self.executioner.redirectingOutput = False
             return
+        #redirecting input from source
+        elif '<' in self.argsList:
+            self.executioner.redirectingInput = True
+            self.executioner.execute_task(self.argsList)
+            #reset back to default
+            self.executioner.redirectingInput = False
+            return
+
         else:
             self.executioner.execute_task(self.argsList)
 
