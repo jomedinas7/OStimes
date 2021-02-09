@@ -33,27 +33,24 @@ class TaskExecuter:
     def __init__(self):
         pass
 
-    def execute_task(self,args):
-        child_pid = self.execute_background_task(args)
-        try:
-            rc = os.waitpid(child_pid,0)
-            if rc[1] != 0:
-                print("Program terminated: exit code",rc[1])
-        except ChildProcessError:
-            os.kill(child_pid,0)
 
-    def execute_background_task(self,argsList):
+
+    def execute_task(self,argsList):
         child_process = os.fork()
-        if child_process == 0:
-            try:
-                for path in os.environ['PATH'].split(os.pathsep):
-                    try:
-                        os.execv(path +'/' + argsList[0],argsList)
-                    except FileNotFoundError:
-                        pass
-            except FileNotFoundError:
-                    os._exit(0)
-
+        if child_process <0:
+            sys.exit(1)
+        elif child_process == 0:
+            for path in os.environ['PATH'].split(os.pathsep):
+                try:
+                    os.execv(path +'/' + argsList[0],argsList)
+                except FileNotFoundError:
+                    pass
+            sys.exit(1)
+        else:
+            if argsList[-1] != "&": # We will wait for child to finish
+                ec = os.waitpid(child_process,0)
+                if ec[1] != 0:
+                    print("Program terminated: exit code ", ec[1])
         return child_process
 
     def redirect_output(self,src_args,dest):
@@ -85,7 +82,8 @@ class Shell:
             self.argsList = self.reader.get_next_line()
             if len(self.argsList) == 1 and self.argsList[0] == 'exit':
                 self.exit_run()
-            self.process_input()
+            else:
+                self.process_input()
         return
 
     def exit_run(self):
@@ -124,10 +122,10 @@ class Shell:
             return
         else:
             #for knowing when to run background tasks
-            if self.argsList[-1][-1] == '&':
-                self.executioner.execute_background_task(self.argsList)
-            else:
-                self.executioner.execute_task(self.argsList)
+            # if self.argsList[-1][-1] == '&':
+            #     self.executioner.execute_background_task(self.argsList)
+            # else:
+            self.executioner.execute_task(self.argsList)
 
 
 def main():
