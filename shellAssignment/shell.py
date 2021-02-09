@@ -24,8 +24,10 @@ class FileReader:
 
     def get_next_line(self):
         line = self.file_lines.pop(0)
+        print("Line read: ", line)
         if line[0] == '#':
             #skip the line
+            print('line skipped')
             line = self.file_lines.pop(0)
 
         return line.split(" ")

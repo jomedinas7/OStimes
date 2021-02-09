@@ -13,5 +13,5 @@ nonExistentCommand
 ls nonExistentFile
 spinner.py 10000000 &
 wc < echo-out1.txt
-wc echo-out1.txt echo-out2.txt  | grep total
-exit
+#wc echo-out1.txt echo-out2.txt  | grep total
+#exit
