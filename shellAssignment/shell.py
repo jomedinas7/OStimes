@@ -1,13 +1,14 @@
 #Joseph Medina - Sandoval
 
 import os
-
+import sys
 #from aa-chatbot.py modified
 class ConsoleReader:
     def __init__(self):
         pass
 
     def get_next_line(self):
+        #getting the value of the PS1 environment variable
         if os.getenv("PS1") == None:
             return input('$$$$ ').split(" ")
         return input(os.getenv("PS1")).split(" ")
@@ -21,8 +22,9 @@ class FileReader:
 
     def get_next_line(self):
         line = self.file_lines.pop(0)
-        print('line:', line)
+        #print('line:', line)
         if line[0] == '#':
+            #skip the line
             line = self.file_lines.pop(0)
 
         return line.split(" ")
@@ -33,16 +35,39 @@ class TaskExecuter:
 
     def execute_task(self,args):
         child_pid = self.execute_background_task(args)
-        os.waitpid(child_pid,0)
+        try:
+            rc = os.waitpid(child_pid,0)
+            if rc[1] != 0:
+                print("Program terminated: exit code",rc[1])
+        except ChildProcessError:
+            os.kill(child_pid,0)
 
     def execute_background_task(self,argsList):
         child_process = os.fork()
         if child_process == 0:
             try:
-                os.execv('/usr/bin/' + argsList[0],argsList)
+                for path in os.environ['PATH'].split(os.pathsep):
+                    try:
+                        os.execv(path +'/' + argsList[0],argsList)
+                    except FileNotFoundError:
+                        pass
             except FileNotFoundError:
-                os._exit(0)
+                    os._exit(0)
+
         return child_process
+
+    def redirect_output(self,src_args,dest):
+        child_id = os.fork()
+        if child_id == 0:
+            try:
+                fd = os.open(dest, os.O_WRONLY | os.O_CREAT)
+                os.dup2(fd, 1)
+                os.execv('/usr/bin/' + src_args[0], src_args)
+            except FileNotFoundError:
+                print('That is not a valid command')
+                os._exit(0)
+
+
 
 class Shell:
     def __init__(self,reader):
@@ -89,13 +114,20 @@ class Shell:
             lolita = self.argsList[0].split("=")
             os.environ['PS1']  = lolita[1]
             return
-        #for knowing when to run background tasks
-        if self.argsList[-1][-1] == '&':
-            self.executioner.execute_background_task(self.argsList)
+        #redirecting output
+        if '>' in self.argsList:
+            args = ' '.join(self.argsList)
+            redirection = args.split('>')
+            command_args = redirection[0].split()
+            dest = redirection[1].replace(' ', '')
+            self.executioner.redirect_output(command_args, dest)
+            return
         else:
-            self.executioner.execute_task(self.argsList)
-
-
+            #for knowing when to run background tasks
+            if self.argsList[-1][-1] == '&':
+                self.executioner.execute_background_task(self.argsList)
+            else:
+                self.executioner.execute_task(self.argsList)
 
 
 def main():

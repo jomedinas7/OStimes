@@ -1,4 +1,6 @@
+PS1=lolita
 echo Hello World
 #ls
 echo laLuchona
 ls
+exit
